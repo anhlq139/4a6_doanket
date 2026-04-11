@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>FINAL WEB</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+<style>
+body { font-family: Arial; margin:0; text-align:center; }
+
+.box {
+    background:white;
+    width:300px;
+    margin:100px auto;
+    padding:20px;
+    border-radius:10px;
+}
+
+#drawPage, #idPage { display:none; height:100vh; }
+#drawPage { background:lightblue; }
+#idPage { background:#111; color:white; }
+
+canvas {
+    border:2px solid black;
+    background:white;
+}
+
+#chatBox {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    width: 260px;
+    background: white;
+    border: 2px solid black;
+}
+
+#messages {
+    height: 150px;
+    overflow-y: auto;
+    text-align:left;
+    padding:5px;
+}
+
+.id-btn {
+    margin:5px;
+    padding:10px;
+    cursor:pointer;
+}
+</style>
+</head>
+
+<body style="background: linear-gradient(to right,#667eea,#764ba2);">
+
+<!-- LOGIN -->
+<div id="loginPage" class="box">
+<h2>🔐 Login</h2>
+<input id="loginUser" placeholder="Username">
+<input type="password" id="loginPass" placeholder="Password">
+<button onclick="login()">Login</button>
+<p id="loginMsg"></p>
+
+<hr>
+
+<h2>📝 Sign Up</h2>
+<input id="signupUser" placeholder="New Username">
+<input type="password" id="signupPass" placeholder="New Password">
+<button onclick="signup()">Sign Up</button>
+<p id="signupMsg"></p>
+</div>
+
+<!-- CHỌN ID -->
+<div id="idPage">
+<h2>🔥 Hãy chọn ID của bạn 🔥</h2>
+
+<button class="id-btn" onclick="selectID('T13092016')">T13092016</button>
+<button class="id-btn" onclick="selectID('BHS12786')">BHS12786</button>
+<button class="id-btn" onclick="selectID('JIL89706')">JIL89706</button>
+<button class="id-btn" onclick="selectID('IOS124635')">IOS124635</button>
+<button class="id-btn" onclick="selectID('LOGBIG16754')">LOGBIG16754</button>
+<button class="id-btn" onclick="selectID('EXTRE135763')">EXTRE135763</button>
+
+<p id="idMsg"></p>
+</div>
+
+<!-- DRAW -->
+<div id="drawPage">
+<h2>🎨 Trang vẽ + Chat</h2>
+
+<input type="color" id="colorPicker">
+<input type="range" id="sizePicker" min="1" max="20" value="3">
+
+<br><br>
+
+<button onclick="clearCanvas()">🧹 Xóa</button>
+<button onclick="logout()">🚪 Logout</button>
+
+<h3 id="userInfo"></h3>
+
+<canvas id="canvas" width="500" height="400"></canvas>
+
+<!-- CHAT -->
+<div id="chatBox">
+<input id="friendID" placeholder="Nhập ID bạn">
+<button onclick="connectFriend()">Kết nối</button>
+<p id="friendStatus"></p>
+
+<div id="messages"></div>
+<input id="chatInput" placeholder="Nhắn...">
+<button onclick="sendMessage()">Gửi</button>
+</div>
+
+</div>
+
+<script>
+// 🔥 DÁN CONFIG FIREBASE
+const firebaseConfig = {
+  apiKey: "YOUR_KEY",
+  authDomain: "YOUR_APP.firebaseapp.com",
+  databaseURL: "https://YOUR_APP-default-rtdb.firebaseio.com",
+  projectId: "YOUR_APP",
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// SIGNUP
+function signup(){
+let u=signupUser.value;
+let p=signupPass.value;
+
+if(!u||!p){
+signupMsg.innerHTML="❌ Nhập đủ!";
+return;
+}
+
+localStorage.setItem("user",u);
+localStorage.setItem("pass",p);
+
+// reset ID cũ (quan trọng)
+localStorage.removeItem("userID");
+
+loginPage.style.display="none";
+idPage.style.display="block";
+}
+
+// CHỌN ID
+function selectID(id){
+localStorage.setItem("userID",id);
+idMsg.innerHTML="✅ ID: "+id;
+
+setTimeout(()=>{
+idPage.style.display="none";
+drawPage.style.display="block";
+initCanvas();
+setMyID();
+
+userInfo.innerHTML="👤 "+localStorage.getItem("user")+" | ID: "+id;
+},800);
+}
+
+// LOGIN (ĐÃ FIX LỖI NULL)
+function login(){
+if(loginUser.value===localStorage.getItem("user") &&
+loginPass.value===localStorage.getItem("pass")){
+
+let savedID = localStorage.getItem("userID");
+
+loginPage.style.display="none";
+
+if(!savedID){
+    idPage.style.display="block";
+} else {
+    drawPage.style.display="block";
+    initCanvas();
+    setMyID();
+
+    userInfo.innerHTML="👤 "+localStorage.getItem("user")+
+    " | ID: "+savedID;
+}
+
+}else{
+loginMsg.innerHTML="❌ Sai!";
+}
+}
+
+// LOGOUT
+function logout(){ location.reload(); }
+
+// CANVAS
+let canvas,ctx,drawing=false;
+
+function initCanvas(){
+canvas=document.getElementById("canvas");
+ctx=canvas.getContext("2d");
+
+canvas.onmousedown=()=>drawing=true;
+canvas.onmouseup=()=>drawing=false;
+canvas.onmousemove=draw;
+}
+
+function draw(e){
+if(!drawing)return;
+
+ctx.fillStyle=colorPicker.value;
+ctx.beginPath();
+ctx.arc(e.offsetX,e.offsetY,sizePicker.value,0,Math.PI*2);
+ctx.fill();
+}
+
+function clearCanvas(){
+ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+// CHAT REALTIME
+let myID="", friendID="";
+
+function setMyID(){
+myID = localStorage.getItem("userID");
+}
+
+function connectFriend(){
+friendID = document.getElementById("friendID").value;
+
+if(!friendID){
+friendStatus.innerHTML="❌ Nhập ID!";
+return;
+}
+
+friendStatus.innerHTML="🟢 Chat với: "+friendID;
+
+db.ref("chat/"+myID+"/"+friendID).on("child_added", function(data){
+let msg = data.val();
+addMsg(msg.user + ": " + msg.text);
+});
+}
+
+function sendMessage(){
+let msg = chatInput.value;
+if(!msg) return;
+
+db.ref("chat/"+friendID+"/"+myID).push({
+user: myID,
+text: msg
+});
+
+addMsg("Bạn: " + msg);
+chatInput.value="";
+}
+
+// HIỂN THỊ
+function addMsg(t){
+messages.innerHTML+=t+"<br>";
+messages.scrollTop=messages.scrollHeight;
+}
+</script>
+
+</body>
+</html>
